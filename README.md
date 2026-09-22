@@ -77,7 +77,7 @@ codex-claude-code-secret-cleaner --dry-run
 Example output:
 
 ```text
-mode=dry_run scanned_files=42 changed_files=3 redactions=9
+mode=dry_run scanned_files=42 changed_files=3 redactions=9 incremental=0 elapsed_seconds=1.234
 ```
 
 The command reports counts only. It does not print the secret values it found.
@@ -104,28 +104,39 @@ To scan specific files or directories:
 codex-claude-code-secret-cleaner --path ~/.codex --path ~/my-agent-logs
 ```
 
-## Install as a Cron Job
+## Incremental Scans
 
-This tool is meant to be installed as a cron job so new AI assistant transcripts are cleaned automatically.
-
-Open your crontab:
+Use `--incremental` for recurring scans of the default history paths:
 
 ```bash
-crontab -e
+codex-claude-code-secret-cleaner --incremental --dry-run
+codex-claude-code-secret-cleaner --incremental
 ```
 
-Add this daily job:
+The first incremental run scans all default paths. Later runs check file timestamps before reading content and select files changed after the previous successful run started. Each selected file is scanned in full. Metadata change times also catch imported files that retain an older modification time.
 
-```cron
-17 4 * * * /home/YOUR_USER/.local/bin/codex-claude-code-secret-cleaner --quiet >> /home/YOUR_USER/.local/state/codex-claude-code-secret-cleaner/cron.log 2>&1
-```
+The checkpoint is stored in `~/.local/state/codex-claude-code-secret-cleaner/last-successful-start-ns`. Dry runs and failed runs do not advance it. Edits made during a scan remain eligible for the next run.
 
-Replace `YOUR_USER` with your username. To avoid hardcoding it, generate the line from your shell:
+Without `--incremental`, the command performs a full scan. Use a full scan after changing detection patterns. Custom `--path` scans cannot use `--incremental` or advance its checkpoint.
+
+## Install as a Cron Job
+
+The suggested schedule is Sunday at 1:17 AM in the machine's local timezone, with reduced CPU priority. Cron requires the machine to be awake at that time.
+
+Create the log directory, then open your crontab:
 
 ```bash
 mkdir -p "$HOME/.local/state/codex-claude-code-secret-cleaner"
-(crontab -l 2>/dev/null; echo "17 4 * * * $HOME/.local/bin/codex-claude-code-secret-cleaner --quiet >> $HOME/.local/state/codex-claude-code-secret-cleaner/cron.log 2>&1") | crontab -
+crontab -e
 ```
+
+Replace any existing cleaner entry with this weekly job. Keep other jobs unchanged:
+
+```cron
+17 1 * * 0 PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin /usr/bin/nice -n 15 "$HOME/.local/bin/codex-claude-code-secret-cleaner" --incremental --quiet >> "$HOME/.local/state/codex-claude-code-secret-cleaner/cron.log" 2>&1
+```
+
+The explicit `PATH` lets cron find Python and optional ripgrep installations in common locations. Without ripgrep, the cleaner uses its Python fallback on the selected files.
 
 Verify it was installed:
 
@@ -143,6 +154,16 @@ The cleaner writes a small audit log here:
 
 The log contains timestamps and summary counts only, not secret values.
 
+## Tests
+
+Run the regression tests with Python's standard library:
+
+```bash
+python3 -m unittest -v test_incremental.py
+```
+
+The tests use temporary directories and do not scan your history.
+
 ## Safety Notes
 
 - This tool redacts local files in place unless `--dry-run` is used.
@@ -151,4 +172,3 @@ The log contains timestamps and summary counts only, not secret values.
 - It is designed for local conversation history, not as a full source-code secret scanner.
 
 For Git repositories, pair this with a dedicated scanner such as Gitleaks, TruffleHog, or GitHub secret scanning.
-

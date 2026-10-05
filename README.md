@@ -144,12 +144,43 @@ Verify it was installed:
 crontab -l | grep codex-claude-code-secret-cleaner
 ```
 
+## Windows
+
+The cleaner runs natively on Windows 10 and 11 with Python 3.9 or newer. ripgrep is optional but makes full scans much faster.
+
+```powershell
+winget install Python.Python.3.13 BurntSushi.ripgrep.MSVC
+git clone https://github.com/jonit-dev/codex-claude-code-secret-cleaner.git
+cd codex-claude-code-secret-cleaner
+.\install-windows.ps1 -Schedule
+```
+
+The installer copies the script and a `codex-claude-code-secret-cleaner.cmd` launcher to `%LOCALAPPDATA%\Programs\codex-claude-code-secret-cleaner` and adds that folder to your user `PATH`. Open a new terminal, then use the same commands as on macOS and Linux:
+
+```powershell
+codex-claude-code-secret-cleaner --dry-run
+codex-claude-code-secret-cleaner
+```
+
+`-Schedule` registers a weekly Task Scheduler job (Sunday 1:17 AM, low priority, no console window). Change it with `-Day` and `-At`, for example `.\install-windows.ps1 -Schedule -Day Friday -At 18:00`. Missed runs start when the machine is next available. Remove everything with `.\install-windows.ps1 -Uninstall`.
+
+If PowerShell blocks the installer, run it once with `powershell -ExecutionPolicy Bypass -File .\install-windows.ps1 -Schedule`.
+
+Windows notes:
+
+- Windows does not allow replacing a file that a running Claude Code or Codex session holds open. The cleaner retries, then skips that file, reports `files_in_use=N`, and does not advance the incremental checkpoint, so the next run tries again. Close the assistants and run again to clean those files.
+- State, checkpoint, and logs live in `%LOCALAPPDATA%\codex-claude-code-secret-cleaner`.
+- CRLF line endings are preserved.
+
+`CODEX_HOME` and `CLAUDE_CONFIG_DIR` are honored on every platform when you relocated those directories.
+
 ## Logs
 
 The cleaner writes a small audit log here:
 
 ```text
-~/.local/state/codex-claude-code-secret-cleaner/scrubber.log
+~/.local/state/codex-claude-code-secret-cleaner/scrubber.log      (macOS, Linux)
+%LOCALAPPDATA%\codex-claude-code-secret-cleaner\scrubber.log      (Windows)
 ```
 
 The log contains timestamps and summary counts only, not secret values.
